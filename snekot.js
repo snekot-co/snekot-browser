@@ -36,7 +36,7 @@
   const log = (...args) => state.debug && console.log('[snekot]', ...args);
   // Said once, whether or not debug is on: a page that never calls setConfig sends nothing, and should not do so silently.
   let warned = false;
-  const unconfigured = () => { if (!warned) { warned = true; console.warn("[snekot] not configured: nothing is sent until snekot('setConfig', { token, project }) is called."); } };
+  const unconfigured = () => { if (!warned) { warned = true; console.warn("[snekot] not configured: nothing is sent until snekot('setConfig', 'PUBLIC_KEY', 'project-slug') is called."); } };
   const kebab = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').replace(/[_\s]+/g, '-').toLowerCase();
   const stored = () => { try { return localStorage.getItem(USER_KEY) || undefined; } catch { return undefined; } };
   const seconds = (value) => {
@@ -113,9 +113,13 @@
       body.timestamp = seconds(body.timestamp);
       send('/v1/log', body);
     },
+    // Who is signed in and what the site says about them, in one call: with a user_id it also remembers them, as
+    // setUserId does, so their page views and events carry the id from here on. Nothing is read off the page;
+    // a person has only the details the site passes here.
     identify(options) {
+      if (options && options.user_id) commands.setUserId(options.user_id);
       const user = (options && options.user_id) || stored();
-      if (user) send('/v1/identify', { ...options, user_id: user });
+      if (user) send('/v1/identify', { ...options, user_id: String(user) });
     },
     group(options) { send('/v1/group', { ...options, user_id: (options && options.user_id) || stored() }); },
     // Which variant of an A/B test this visitor gets. The server works it out from who is asking, so the same
@@ -138,8 +142,12 @@
     },
     // Puts an address on the project's newsletter list. The answer comes to the callback and as a promise: true
     // once the server has it, false when it was refused or could not be reached, so a form can say which.
+    // The language and the time zone are the browser's own unless the page says otherwise, so a list knows who
+    // reads what, and when their morning is.
     subscribe(email, properties, options, callback) {
-      const body = { project: state.project, email, properties: properties || undefined, name: (options && options.name) || undefined, source: location.pathname.slice(0, 500), visitor_id: visitor() };
+      let zone;
+      try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (error) { /* A browser too old to say. */ }
+      const body = { project: state.project, email, properties: properties || undefined, name: (options && options.name) || undefined, language: (options && options.language) || navigator.language || undefined, timezone: (options && options.timezone) || zone || undefined, source: location.pathname.slice(0, 500), visitor_id: visitor() };
       let result;
       if (!state.token || !state.project) { unconfigured(); result = Promise.resolve(false); }
       else if (state.debug) { log('/v1/subscribe', body); result = Promise.resolve(true); }
@@ -237,7 +245,7 @@
     if (!email) return show('error');
     show('sending');
     const tags = tagsOf(form);
-    commands.subscribe(email, Object.keys(tags).length ? tags : undefined, { name: (named && named.value.trim()) || undefined }).then((ok) => {
+    commands.subscribe(email, Object.keys(tags).length ? tags : undefined, { name: (named && named.value.trim()) || undefined, language: form.getAttribute('data-snekot-language') || undefined }).then((ok) => {
       show(ok ? 'done' : 'error');
       if (ok) form.reset();
       form.dispatchEvent(new CustomEvent(ok ? 'snekot:subscribed' : 'snekot:subscribe-failed', { bubbles: true, detail: { email } }));

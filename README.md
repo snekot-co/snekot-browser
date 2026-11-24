@@ -27,7 +27,7 @@ Calls made before the script has loaded wait in a queue and run in order when it
 | `snekot('track', { channel, event, … })` | Posts an event. |
 | `snekot('identify', { properties })` | Sets properties on the signed-in user. |
 | `snekot('experiment', name, variants, callback)` | Which variant of an A/B test this visitor gets. |
-| `snekot('subscribe', email, properties)` | Puts an address on the project's newsletter list. |
+| `snekot('subscribe', email, properties, options)` | Puts an address on the project's newsletter list, with the browser's language and time zone. `options` may give a `name` and a `language`. |
 | `snekot('remember', true)` | Keeps a visitor id on the device from now on; `false` stops and removes it. |
 | `snekot('setDebug', true)` | Logs what would be sent to the console, and sends nothing. The console says so once. |
 
@@ -39,7 +39,7 @@ A click on an element with `data-event` posts that event:
 <button data-event="Upgrade clicked" data-channel="billing" data-icon="💰" data-tag-plan="Pro">Upgrade</button>
 ```
 
-A `<form>` with `data-event` posts on submit, with each filled-in field as a tag. Password fields are left out, and so are card fields and any field whose name contains `pass`, `secret`, `token`, `csrf`, `card`, `cvc`, `cvv`, `ssn` or `iban`. A `<form data-snekot-subscribe>` with an email field sends the address to the project's newsletter list.
+A `<form>` with `data-event` posts on submit, with each filled-in field as a tag. Password fields are left out, and so are card fields and any field whose name contains `pass`, `secret`, `token`, `csrf`, `card`, `cvc`, `cvv`, `ssn` or `iban`. A `<form data-snekot-subscribe>` with an email field sends the address to the project's newsletter list, with the browser's language and time zone; `data-snekot-language="sv"` on the form says the page's language instead.
 
 ## What it keeps on a visitor's device
 
