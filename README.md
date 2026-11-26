@@ -27,6 +27,9 @@ Calls made before the script has loaded wait in a queue and run in order when it
 | `snekot('track', { channel, event, … })` | Posts an event. |
 | `snekot('identify', { properties })` | Sets properties on the signed-in user. |
 | `snekot('experiment', name, variants, callback)` | Which variant of an A/B test this visitor gets. |
+| `snekot('flag', key, callback)` | Whether a feature flag is on for this visitor: `true` or `false`, to the callback and as a promise. `false` when it cannot be asked. Asked once per key on a page. |
+| `snekot('visitorId', callback)` | The visitor id this device keeps, for a page to hand to its own server. Undefined while nothing is remembered. |
+| `snekot('checkoutId', callback)` | The id to hand a checkout, so the payment it reports lands on whoever is on this page. |
 | `snekot('subscribe', email, properties, options)` | Puts an address on the project's newsletter list, with the browser's language and time zone. `options` may give a `name` and a `language`. |
 | `snekot('remember', true)` | Keeps a visitor id on the device from now on; `false` stops and removes it. |
 | `snekot('setDebug', true)` | Logs what would be sent to the console, and sends nothing. The console says so once. |

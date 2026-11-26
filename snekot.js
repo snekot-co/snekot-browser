@@ -79,6 +79,8 @@
   let lastPage = null;
   // The variant each experiment answered with on this page, so asking twice sends one request.
   const assigned = {};
+  // Whether each flag asked for on this page is on, for the same reason.
+  const flags = {};
   const commands = {
     setConfig(token, project, options) {
       state.token = token; state.project = project;
@@ -93,6 +95,13 @@
     remember(flag = true) {
       state.remember = flag !== false;
       if (!state.remember) { try { localStorage.removeItem(VISITOR_KEY); } catch {} }
+    },
+    // The id this device keeps for its visitor, for a page to hand to its own server: what the server then posts
+    // with it as "visitor_id" belongs to the same visitor as the page views. Undefined while nothing is remembered.
+    visitorId(callback) {
+      const id = visitor();
+      if (typeof callback === 'function') callback(id);
+      return id;
     },
     setDebug(flag = true) {
       state.debug = flag !== false;
@@ -140,6 +149,23 @@
       if (typeof callback === 'function') assigned[name].then(callback);
       return assigned[name];
     },
+    // Whether a feature flag is on for this visitor: true or false, to the callback and as a promise. The server
+    // works it out from who is asking, as it does a variant, so nothing is kept here. Asking twice on a page sends
+    // one request. If the answer cannot be had, the flag is off.
+    flag(key, callback) {
+      if (!flags[key]) {
+        flags[key] = !state.token || !state.project || state.debug
+          ? Promise.resolve(false)
+          : fetch(state.api + '/v1/flag', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + state.token },
+              body: JSON.stringify({ project: state.project, flag: key, user_id: stored(), visitor_id: visitor() }),
+            }).then((response) => (response.ok ? response.json() : null)).then((answer) => !!answer && answer.on === true).catch(() => false);
+        if (state.debug) log('/v1/flag', { flag: key });
+      }
+      if (typeof callback === 'function') flags[key].then(callback);
+      return flags[key];
+    },
     // Puts an address on the project's newsletter list. The answer comes to the callback and as a promise: true
     // once the server has it, false when it was refused or could not be reached, so a form can say which.
     // The language and the time zone are the browser's own unless the page says otherwise, so a list knows who
@@ -157,6 +183,34 @@
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + state.token },
         body: JSON.stringify(body),
       }).then((response) => response.ok).catch(() => false);
+      if (typeof callback === 'function') result.then(callback);
+      return result;
+    },
+    // The id to hand a checkout, so the payment it reports lands on whoever is on this page: the person's own id
+    // when the site has said who they are, else the visitor their page views carry. It is made only of letters,
+    // digits, dashes and underscores, which is all a payment link's address lets through. Nothing is kept here
+    // for it. The answer comes to the callback and as a promise; with nothing to go by it is undefined, and the
+    // checkout goes on without it.
+    checkoutId(callback) {
+      const user = stored();
+      const kept = visitor();
+      let id;
+      if (user) {
+        if (/^[A-Za-z0-9_-]+$/.test(user)) id = 'snekot-u-' + user;
+        else { try { id = 'snekot-b-' + btoa(String.fromCharCode(...new TextEncoder().encode(user))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); } catch {} }
+        // A payment service takes 200 characters at most, and refuses the whole checkout for one more.
+        if (id && id.length > 200) id = undefined;
+      }
+      if (!id && kept) id = 'snekot-v-' + kept;
+      let result;
+      if (id) result = Promise.resolve(id);
+      else if (!state.token || !state.project) { unconfigured(); result = Promise.resolve(undefined); }
+      else if (state.debug) { log('/v1/visitor', { project: state.project }); result = Promise.resolve(undefined); }
+      else result = fetch(state.api + '/v1/visitor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + state.token },
+        body: JSON.stringify({ project: state.project }),
+      }).then((response) => (response.ok ? response.json() : null)).then((answer) => (answer && answer.checkout_id) || undefined).catch(() => undefined);
       if (typeof callback === 'function') result.then(callback);
       return result;
     },
